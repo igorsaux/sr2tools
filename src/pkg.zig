@@ -74,7 +74,6 @@ pub const Pkg = struct {
             const recsize = try freader.interface.takeInt(u32, .little);
 
             if (recsize != @sizeOf(FileRec)) {
-                std.debug.print("invalid recsize: {d} (expected: {d})", .{ recsize, @sizeOf(FileRec) });
                 return Error.InvalidRecSize;
             }
 
