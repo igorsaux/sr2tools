@@ -19,7 +19,7 @@ $ sr2tools dump DATA/common.pkg common.json
 ## TODO:
 
 - [X] PKG
-- [ ] DAT
+- [X] DAT
 - [ ] GI
 - [ ] GAI
 - [ ] HAI

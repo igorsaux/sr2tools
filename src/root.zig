@@ -3,4 +3,5 @@
 
 const std = @import("std");
 
+pub const Dat = @import("dat.zig").Dat;
 pub const Pkg = @import("pkg.zig").Pkg;

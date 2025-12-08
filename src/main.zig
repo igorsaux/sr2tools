@@ -12,7 +12,7 @@ fn printHelp(status: u8) noreturn {
 
 const Command = enum { unpack, dump };
 
-fn unpackFolder(dir: *std.fs.Dir, folder: *const sr2tools.Pkg.Folder) !void {
+fn unpackPkgFolder(dir: *std.fs.Dir, folder: *const sr2tools.Pkg.Folder) !void {
     for (folder.file_recs, 0..) |*rec, i| {
         if (rec.ty == .folder) {
             continue;
@@ -35,9 +35,20 @@ fn unpackFolder(dir: *std.fs.Dir, folder: *const sr2tools.Pkg.Folder) !void {
             var inner_dir = try dir.makeOpenPath(name, .{});
             defer inner_dir.close();
 
-            try unpackFolder(&inner_dir, f);
+            try unpackPkgFolder(&inner_dir, f);
         }
     }
+}
+
+inline fn dumpValue(v: anytype, where: []const u8) !void {
+    const dst = try std.fs.cwd().createFile(where, .{});
+    defer dst.close();
+
+    var writer_buffer: [1024]u8 = undefined;
+    var writer = dst.writer(&writer_buffer);
+
+    try std.json.Stringify.value(v, .{ .whitespace = .minified }, &writer.interface);
+    try writer.interface.flush();
 }
 
 fn doCmd(allocator: std.mem.Allocator, cmd: Command, what: []const u8, where: []const u8) !void {
@@ -58,18 +69,23 @@ fn doCmd(allocator: std.mem.Allocator, cmd: Command, what: []const u8, where: []
                 var dst_dir = try std.fs.cwd().makeOpenPath(where, .{});
                 defer dst_dir.close();
 
-                try unpackFolder(&dst_dir, &pkg.root_folder);
+                try unpackPkgFolder(&dst_dir, &pkg.root_folder);
             },
             .dump => {
-                const dst = try std.fs.cwd().createFile(where, .{});
-                defer dst.close();
+                try dumpValue(pkg, where);
+            },
+        }
+    } else if (std.mem.eql(u8, extension, ".dat")) {
+        var dat = try sr2tools.Dat.read(allocator, &reader);
+        defer dat.deinit(allocator);
 
-                var writer_buffer: [1024]u8 = undefined;
-                var writer = dst.writer(&writer_buffer);
-
-                try std.json.Stringify.value(pkg, .{ .whitespace = .minified }, &writer.interface);
-
-                try writer.interface.flush();
+        switch (cmd) {
+            .unpack => {
+                std.debug.print("Can't unpack .dat files\n", .{});
+                printHelp(1);
+            },
+            .dump => {
+                try dumpValue(dat, where);
             },
         }
     } else {
