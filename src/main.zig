@@ -6,11 +6,11 @@ const std = @import("std");
 const sr2tools = @import("sr2tools");
 
 fn printHelp(status: u8) noreturn {
-    std.debug.print("Usage: sr2tools <unpack|dump> <what> <where>\n", .{});
+    std.debug.print("Usage: sr2tools <unpack|dump|tga> <what> <where>\n", .{});
     std.process.exit(status);
 }
 
-const Command = enum { unpack, dump };
+const Command = enum { unpack, dump, tga };
 
 fn unpackPkgFolder(dir: *std.fs.Dir, folder: *const sr2tools.Pkg.Folder) !void {
     for (folder.file_recs, 0..) |*rec, i| {
@@ -74,18 +74,56 @@ fn doCmd(allocator: std.mem.Allocator, cmd: Command, what: []const u8, where: []
             .dump => {
                 try dumpValue(pkg, where);
             },
+            else => {
+                std.debug.print("Invalid command for .pkg file\n", .{});
+                printHelp(1);
+            },
         }
     } else if (std.mem.eql(u8, extension, ".dat")) {
         var dat = try sr2tools.Dat.read(allocator, &reader);
         defer dat.deinit(allocator);
 
         switch (cmd) {
-            .unpack => {
-                std.debug.print("Can't unpack .dat files\n", .{});
-                printHelp(1);
-            },
             .dump => {
                 try dumpValue(dat, where);
+            },
+            else => {
+                std.debug.print("Invalid command for .dat file\n", .{});
+                printHelp(1);
+            },
+        }
+    } else if (std.mem.eql(u8, extension, ".gi")) {
+        var gi = try sr2tools.Gi.read(allocator, &reader);
+        defer gi.deinit(allocator);
+
+        switch (cmd) {
+            .dump => {
+                try dumpValue(gi, where);
+            },
+            .tga => {
+                const width: u16 = @intCast(gi.header.right - gi.header.left);
+                const height: u16 = @intCast(gi.header.bottom - gi.header.top);
+
+                const tga: []u8 = try sr2tools.Tga.fromRgba(
+                    allocator,
+                    gi.pixels,
+                    width,
+                    height,
+                );
+                defer allocator.free(tga);
+
+                const out_file = try std.fs.cwd().createFile(where, .{});
+                defer out_file.close();
+
+                var out_buffer: [1024]u8 = undefined;
+                var writer = out_file.writer(&out_buffer);
+
+                try writer.interface.writeAll(tga);
+                try writer.interface.flush();
+            },
+            else => {
+                std.debug.print("Invalid command for .gi file\n", .{});
+                printHelp(1);
             },
         }
     } else {
@@ -115,6 +153,8 @@ pub fn main() !void {
         command = .unpack;
     } else if (std.mem.eql(u8, cmd, "dump")) {
         command = .dump;
+    } else if (std.mem.eql(u8, cmd, "tga")) {
+        command = .tga;
     } else {
         std.debug.print("Unknown command '{s}'\n", .{cmd});
         printHelp(1);
